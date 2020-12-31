@@ -145,6 +145,31 @@ func (fs *FS) ReadFile(path string) ([]byte, error) {
 	return fi.Data, nil
 }
 
+// Walk is a stub for filepath.Walk
+func (fs *FS) Walk(root string, walkFn filepath.WalkFunc) error {
+
+	if v, ok := fs.PathStubs[root]; ok {
+		if v.Error != nil {
+			fs.TestDouble.Log("op=Walk path=%s -> return pre-configured error %v", root, v.Error)
+			return v.Error
+		}
+		if !v.IsDir() {
+			fs.TestDouble.Log("op=Walk path=%s -> return os.ErrInvalid NOT A DIRECTORY", root)
+			return os.ErrInvalid
+		}
+	} else {
+		fs.TestDouble.Log("op=Walk path=%s -> return os.ErrNotExist", root)
+		return os.ErrNotExist
+	}
+
+	for k, _ := range fs.PathStubs {
+		if strings.HasPrefix(k, root) {
+			fi, err := fs.getFile(k, "walk")
+			walkFn(k, fi, err)
+		}
+	}
+	return nil
+}
 func (fs *FS) Abs(p string) (string, error) {
 	if fs.AbsPathError != nil {
 		return "", fs.AbsPathError

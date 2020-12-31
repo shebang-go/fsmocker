@@ -3,9 +3,11 @@ package file
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/shebang-go/fsmocker/testdouble"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -235,6 +237,89 @@ func TestFS_ReadFile(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("FS.ReadFile() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFS_Walk(t *testing.T) {
+	type fields struct {
+		TestDouble    testdouble.TestDouble
+		PathStubs     map[string]*FileInfo
+		AbsPathPrefix string
+		AbsPathError  error
+		t             *testing.T
+	}
+	type args struct {
+		root   string
+		walkFn filepath.WalkFunc
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    []string
+		wantErr error
+	}{
+		{
+			name: "noError(/home/maggy)",
+			fields: fields{PathStubs: map[string]*FileInfo{
+				"/home/maggy":              {FName: "maggy", FIsDir: true},
+				"/home/maggy/file1":        {FName: "file1"},
+				"/home/maggy/file2":        {FName: "file2"},
+				"/home/maggy/subdir":       {FName: "subdir", FIsDir: true},
+				"/home/maggy/subdir/file3": {FName: "file3"},
+			}},
+			args: args{root: "/home/maggy"},
+			want: []string{"/home/maggy/file2", "/home/maggy/subdir", "/home/maggy/subdir/file3", "/home/maggy", "/home/maggy/file1"},
+		},
+		{
+			name: "noError(/home/maggy/subdir)",
+			fields: fields{PathStubs: map[string]*FileInfo{
+				"/home/maggy":              {FName: "maggy", FIsDir: true},
+				"/home/maggy/file1":        {FName: "file1"},
+				"/home/maggy/file2":        {FName: "file2"},
+				"/home/maggy/subdir":       {FName: "subdir", FIsDir: true},
+				"/home/maggy/subdir/file3": {FName: "file3"},
+			}},
+			args: args{root: "/home/maggy/subdir"},
+			want: []string{"/home/maggy/subdir", "/home/maggy/subdir/file3"},
+		},
+		{
+			name:    "errorInvalidPath",
+			fields:  fields{PathStubs: map[string]*FileInfo{}},
+			args:    args{root: "/invalid"},
+			wantErr: errors.New("file does not exist"),
+		},
+		{
+			name: "errorNotADirectory",
+
+			fields: fields{PathStubs: map[string]*FileInfo{
+				"/home/maggy":              {FName: "maggy", FIsDir: true},
+				"/home/maggy/file1":        {FName: "file1"},
+				"/home/maggy/file2":        {FName: "file2"},
+				"/home/maggy/subdir":       {FName: "subdir", FIsDir: true},
+				"/home/maggy/subdir/file3": {FName: "file3"},
+			}},
+			args:    args{root: "/home/maggy/file1"},
+			wantErr: errors.New("invalid argument"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := &FS{
+				PathStubs: tt.fields.PathStubs,
+				t:         tt.fields.t,
+			}
+			got := []string{}
+			err := fs.Walk(tt.args.root, func(path string, f os.FileInfo, err error) error {
+				got = append(got, path)
+				return err
+			})
+			if tt.wantErr == nil {
+				assert.ElementsMatch(t, tt.want, got)
+			} else {
+				assert.EqualError(t, tt.wantErr, err.Error())
 			}
 		})
 	}

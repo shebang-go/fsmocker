@@ -4,6 +4,7 @@ package fsmocker
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/shebang-go/fsmocker/file"
 	"github.com/shebang-go/fsmocker/parser"
@@ -49,6 +50,11 @@ func (st *Stub) ReadFile(path string) ([]byte, error) {
 // ReadDir is a stub for ioutil.ReadDir
 func (st *Stub) ReadDir(path string) ([]os.FileInfo, error) {
 	return st.FS.ReadDir(path)
+}
+
+// Walk is a stub for filepath.Walk
+func (st *Stub) Walk(root string, walkFn filepath.WalkFunc) error {
+	return st.FS.Walk(root, walkFn)
 }
 
 // Abs is a stub for filepath.Abs
