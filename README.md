@@ -31,9 +31,10 @@ fmt.Printf("err:%s\n", err)
 
 ## Supported Methods
 
--   Stat
--   ReadDir
--   ReadFile
+-   os.Stat
+-   ioutil.ReadDir
+-   ioutil.ReadFile
+-   filepath.Walk
 
 ## Syntax
 
