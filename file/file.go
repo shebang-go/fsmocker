@@ -3,6 +3,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -162,9 +163,15 @@ func (fs *FS) Walk(root string, walkFn filepath.WalkFunc) error {
 		return os.ErrNotExist
 	}
 
+	keys := []string{}
 	for k, _ := range fs.PathStubs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
 		if strings.HasPrefix(k, root) {
 			fi, err := fs.getFile(k, "walk")
+			fs.TestDouble.Log("op=Walk path=%s -> calling walkFn", k)
 			walkFn(k, fi, err)
 		}
 	}
