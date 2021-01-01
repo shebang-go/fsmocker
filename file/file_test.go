@@ -81,7 +81,8 @@ func TestFS_ReadDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
-				PathStubs: tt.fields.PathStubs,
+				PathStubs:  tt.fields.PathStubs,
+				TestDouble: &testdouble.TestDouble{},
 			}
 			got, err := fs.ReadDir(tt.args.dirname)
 			assert.ElementsMatch(t, got, tt.want)
@@ -125,7 +126,8 @@ func TestFS_getDirEntries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
-				PathStubs: tt.fields.PathStubs,
+				PathStubs:  tt.fields.PathStubs,
+				TestDouble: &testdouble.TestDouble{},
 			}
 			if got := fs.getDirEntries(tt.args.dirname); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("FS.getDirEntries() = %v, want %v", got, tt.want)
@@ -178,7 +180,8 @@ func TestFS_Stat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
-				PathStubs: tt.fields.PathStubs,
+				PathStubs:  tt.fields.PathStubs,
+				TestDouble: &testdouble.TestDouble{},
 			}
 			got, err := fs.Stat(tt.args.path)
 			if (err != nil) != tt.wantErr {
@@ -227,8 +230,9 @@ func TestFS_ReadFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
-				PathStubs: tt.fields.PathStubs,
-				t:         tt.fields.t,
+				PathStubs:  tt.fields.PathStubs,
+				TestDouble: &testdouble.TestDouble{},
+				t:          tt.fields.t,
 			}
 			got, err := fs.ReadFile(tt.args.path)
 			if (err != nil) != tt.wantErr {
@@ -308,8 +312,9 @@ func TestFS_Walk(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
-				PathStubs: tt.fields.PathStubs,
-				t:         tt.fields.t,
+				PathStubs:  tt.fields.PathStubs,
+				TestDouble: &testdouble.TestDouble{},
+				t:          tt.fields.t,
 			}
 			got := []string{}
 			err := fs.Walk(tt.args.root, func(path string, f os.FileInfo, err error) error {

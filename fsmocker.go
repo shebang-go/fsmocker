@@ -28,13 +28,20 @@ func NewStub(paths []string, opts ...testdouble.Option) *Stub {
 
 	stub := &Stub{
 		testDouble: *testdouble.NewTestDouble(opts...),
-		FS:         file.CreateFS(opts...),
 	}
-
+	stub.FS = file.CreateFS(&stub.testDouble, opts...)
 	for _, v := range paths {
 		stub.FS.AddFiles(parser.Parse(v))
 	}
 	return stub
+}
+
+func (st *Stub) Options(opts ...testdouble.Option) {
+
+	for _, opt := range opts {
+		opt(&st.testDouble.OptionData)
+
+	}
 }
 
 // Stat is a stub for os.Stat
@@ -55,6 +62,11 @@ func (st *Stub) ReadDir(path string) ([]os.FileInfo, error) {
 // Walk is a stub for filepath.Walk
 func (st *Stub) Walk(root string, walkFn filepath.WalkFunc) error {
 	return st.FS.Walk(root, walkFn)
+}
+
+// WriteFile is a stub for ioutil.WriteFile
+func (st *Stub) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	return st.FS.WriteFile(filename, data, perm)
 }
 
 // Abs is a stub for filepath.Abs

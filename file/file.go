@@ -33,16 +33,16 @@ type FileInfo struct {
 }
 
 type FS struct {
-	testdouble.TestDouble
+	*testdouble.TestDouble
 	PathStubs     map[string]*FileInfo
 	AbsPathPrefix string
 	AbsPathError  error
 	t             *testing.T
 }
 
-func CreateFS(opts ...testdouble.Option) *FS {
+func CreateFS(td *testdouble.TestDouble, opts ...testdouble.Option) *FS {
 	t := &FS{
-		TestDouble:    *testdouble.NewTestDouble(opts...),
+		TestDouble:    td,
 		PathStubs:     make(map[string]*FileInfo),
 		AbsPathPrefix: "",
 	}
@@ -64,14 +64,14 @@ func (fs *FS) AddFiles(in []*FileInfo) {
 func (fs *FS) getFile(path string, op string) (*FileInfo, error) {
 	if v, ok := fs.PathStubs[path]; ok {
 		if v.Error != nil {
-			fs.TestDouble.Log("op=%s path=%s -> return pre-configured error %v", op, path, v.Error)
+			fs.TestDouble.Log("*FS.getFile(): op=%s path=%s -> return pre-configured error %v", op, path, v.Error)
 			return nil, v.Error
 
 		}
-		fs.TestDouble.Log("op=%s path=%s -> return os.FileInfo", op, path)
+		fs.TestDouble.Log("*FS.getFile(): op=%s path=%s -> return os.FileInfo", op, path)
 		return v, nil
 	}
-	fs.TestDouble.Log("op=%s path=%s -> return os.ErrNotExist", op, path)
+	fs.TestDouble.Log("*FS.getFile(): op=%s path=%s -> return os.ErrNotExist", op, path)
 	return nil, os.ErrNotExist
 }
 func (fs *FS) getDirEntries(dirname string) map[string]*FileInfo {
@@ -177,6 +177,12 @@ func (fs *FS) Walk(root string, walkFn filepath.WalkFunc) error {
 	}
 	return nil
 }
+
+func (fs *FS) WriteFile(filename string, data []byte, perm os.FileMode) error {
+
+	return nil
+}
+
 func (fs *FS) Abs(p string) (string, error) {
 	if fs.AbsPathError != nil {
 		return "", fs.AbsPathError
