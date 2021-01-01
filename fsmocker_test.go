@@ -114,3 +114,46 @@ func TestStub_ReadDir(t *testing.T) {
 		})
 	}
 }
+
+func TestNewStub(t *testing.T) {
+	type args struct {
+		paths []string
+		opts  []testdouble.Option
+	}
+	tests := []struct {
+		name string
+		args args
+		want *Stub
+	}{
+		{
+			name: "noError",
+			args: args{
+				paths: []string{
+					"/folder1[file1]",
+					"/folder2",
+					"/folder2[file2]",
+				},
+			},
+			want: &Stub{
+				testDouble: *testdouble.NewTestDouble(),
+				FS: &file.FS{
+					TestDouble: testdouble.NewTestDouble(),
+					PathStubs: map[string]*file.FileInfo{
+						"/":              {FName: "/", Path: "/", FIsDir: true},
+						"/folder1":       {FName: "folder1", Path: "/folder1", FIsDir: true},
+						"/folder1/file1": {FName: "file1", Path: "/folder1/file1"},
+						"/folder2":       {FName: "folder2", Path: "/folder2", FIsDir: true},
+						"/folder2/file2": {FName: "file2", Path: "/folder2/file2"},
+					},
+					AbsPathPrefix: "",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewStub(tt.args.paths, tt.args.opts...)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

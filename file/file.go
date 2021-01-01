@@ -50,7 +50,7 @@ func CreateFS(td *testdouble.TestDouble, opts ...testdouble.Option) *FS {
 	for _, opt := range opts {
 		opt(&t.OptionData)
 	}
-	t.PathStubs["/"] = &FileInfo{FName: "/", FIsDir: true}
+	t.PathStubs["/"] = &FileInfo{FName: "/", Path: "/", FIsDir: true}
 	return t
 }
 

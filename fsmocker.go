@@ -11,6 +11,13 @@ import (
 	"github.com/shebang-go/fsmocker/testdouble"
 )
 
+type StubOption func(*Stub)
+
+type StubConfig struct {
+	StubOption
+	testdouble.Option
+}
+
 // Stub represents a file system stub.
 type Stub struct {
 	testDouble testdouble.TestDouble
@@ -34,6 +41,11 @@ func NewStub(paths []string, opts ...testdouble.Option) *Stub {
 		stub.FS.AddFiles(parser.Parse(v))
 	}
 	return stub
+}
+
+// Config provides access to stubs
+func (st *Stub) Config(opts ...testdouble.Option) {
+
 }
 
 func (st *Stub) Options(opts ...testdouble.Option) {
