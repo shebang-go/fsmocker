@@ -3,85 +3,55 @@
 package fsmocker
 
 import (
+	"log"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/shebang-go/fsmocker/file"
-	"github.com/shebang-go/fsmocker/parser"
+	"github.com/shebang-go/fsmocker/stub"
 	"github.com/shebang-go/fsmocker/testdouble"
 )
 
-type StubOption func(*Stub)
-
-type StubConfig struct {
-	StubOption
-	testdouble.Option
+type Stub interface {
+	Config(p string) file.Configer
+	Options(opts ...stub.Option)
+	Stat(path string) (os.FileInfo, error)
+	ReadFile(path string) ([]byte, error)
+	ReadDir(path string) ([]os.FileInfo, error)
+	Walk(root string, walkFn filepath.WalkFunc) error
+	WriteFile(filename string, data []byte, perm os.FileMode) error
+	Abs(p string) (string, error)
 }
+type TestDoubleOption func(td *testdouble.TestDouble)
+type StubOption stub.Option
 
-// Stub represents a file system stub.
-type Stub struct {
-	testDouble testdouble.TestDouble
-	// FS is the test file system.
-	FS *file.FS
-}
+// type StubOption func(st *stub.Stub)
 
-var (
-	//WithLogging is an option func to enable logging output in tests.
-	WithLogging = testdouble.WithLogging
-)
+type stubOption struct{}
 
-// NewStub creates a new stub.
-func NewStub(paths []string, opts ...testdouble.Option) *Stub {
-
-	stub := &Stub{
-		testDouble: *testdouble.NewTestDouble(opts...),
+func WithLogging(t *testing.T) TestDoubleOption {
+	return func(td *testdouble.TestDouble) {
+		td.EnableLogging(t)
 	}
-	stub.FS = file.CreateFS(&stub.testDouble, opts...)
-	for _, v := range paths {
-		stub.FS.AddFiles(parser.Parse(v))
-	}
-	return stub
 }
-
-// Config provides access to stubs
-func (st *Stub) Config(opts ...testdouble.Option) {
-
-}
-
-func (st *Stub) Options(opts ...testdouble.Option) {
-
-	for _, opt := range opts {
-		opt(&st.testDouble.OptionData)
-
+func WithGlobalOptions(opts ...TestDoubleOption) StubOption {
+	return func(st *stub.Stub) {
+		for _, opt := range opts {
+			// td := st.(*stub.Stub)
+			td := st.TestDouble()
+			log.Println(">>>", td, opt)
+			opt(td.(*testdouble.TestDouble))
+		}
 	}
 }
 
-// Stat is a stub for os.Stat
-func (st *Stub) Stat(path string) (os.FileInfo, error) {
-	return st.FS.Stat(path)
-}
-
-// ReadFile is a stub for ioutil.ReadFile
-func (st *Stub) ReadFile(path string) ([]byte, error) {
-	return st.FS.ReadFile(path)
-}
-
-// ReadDir is a stub for ioutil.ReadDir
-func (st *Stub) ReadDir(path string) ([]os.FileInfo, error) {
-	return st.FS.ReadDir(path)
-}
-
-// Walk is a stub for filepath.Walk
-func (st *Stub) Walk(root string, walkFn filepath.WalkFunc) error {
-	return st.FS.Walk(root, walkFn)
-}
-
-// WriteFile is a stub for ioutil.WriteFile
-func (st *Stub) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	return st.FS.WriteFile(filename, data, perm)
-}
-
-// Abs is a stub for filepath.Abs
-func (st *Stub) Abs(p string) (string, error) {
-	return st.FS.Abs(p)
+func NewStub(paths []string, opts ...StubOption) *stub.Stub {
+	o := []stub.Option{}
+	for _, v := range opts {
+		o = append(o, stub.Option(v))
+		// o = append(o, stub.Stub(stub.Option(v)))
+	}
+	st := stub.NewStub(paths, o...)
+	return st.(*stub.Stub)
 }

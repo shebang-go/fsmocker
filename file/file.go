@@ -5,11 +5,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/shebang-go/fsmocker/testdouble"
 )
+
+var Once sync.Once
 
 // FileInfo represents a file (see os.FileInfo)
 type FileInfo struct {
@@ -32,6 +35,45 @@ type FileInfo struct {
 	Path string
 }
 
+type Configer interface {
+	Data(...[]byte) []byte
+	Error(...error) error
+	Mode(...os.FileMode) os.FileMode
+}
+
+type setter struct {
+	fi *FileInfo
+}
+
+func (s *setter) Data(v ...[]byte) []byte {
+	if len(v) == 1 {
+		s.fi.Data = v[0]
+	}
+	return s.fi.Data
+}
+
+func (s *setter) Mode(v ...os.FileMode) os.FileMode {
+	if len(v) == 1 {
+		s.fi.FMode = v[0]
+	}
+	return s.fi.Mode()
+}
+
+func (s *setter) Error(v ...error) error {
+	if len(v) == 1 {
+		s.fi.Error = v[0]
+	}
+	return s.fi.Error
+}
+
+type Option func(*FS)
+
+func WithFiles(files []*FileInfo) Option {
+	return func(fs *FS) {
+		fs.AddFiles(files)
+	}
+}
+
 type FS struct {
 	*testdouble.TestDouble
 	PathStubs     map[string]*FileInfo
@@ -40,18 +82,31 @@ type FS struct {
 	t             *testing.T
 }
 
-func CreateFS(td *testdouble.TestDouble, opts ...testdouble.Option) *FS {
-	t := &FS{
+func CreateFS(td *testdouble.TestDouble, opts ...Option) *FS {
+	fs := &FS{
 		TestDouble:    td,
 		PathStubs:     make(map[string]*FileInfo),
 		AbsPathPrefix: "",
 	}
 
 	for _, opt := range opts {
-		opt(&t.OptionData)
+		opt(fs)
 	}
-	t.PathStubs["/"] = &FileInfo{FName: "/", Path: "/", FIsDir: true}
-	return t
+	fs.PathStubs["/"] = &FileInfo{FName: "/", Path: "/", FIsDir: true}
+	return fs
+}
+
+// Config provides access to stubs
+func (fs *FS) Config(p string) Configer {
+	var fi *FileInfo
+	if v, ok := fs.PathStubs[p]; ok {
+		fi = v
+	}
+	if fi == nil {
+		return nil
+	}
+	s := &setter{fi: fi}
+	return s
 }
 
 func (fs *FS) AddFiles(in []*FileInfo) {
@@ -61,19 +116,21 @@ func (fs *FS) AddFiles(in []*FileInfo) {
 		}
 	}
 }
+
 func (fs *FS) getFile(path string, op string) (*FileInfo, error) {
 	if v, ok := fs.PathStubs[path]; ok {
 		if v.Error != nil {
-			fs.TestDouble.Log("*FS.getFile(): op=%s path=%s -> return pre-configured error %v", op, path, v.Error)
+			fs.TestDouble.Log("return pre-configured error").Path(path).Operation("getFile").Error(v.Error).Done()
 			return nil, v.Error
 
 		}
-		fs.TestDouble.Log("*FS.getFile(): op=%s path=%s -> return os.FileInfo", op, path)
+		// fs.TestDouble.Log("return os.FileInfo").Path(path).Operation("getFile").Done()
 		return v, nil
 	}
-	fs.TestDouble.Log("*FS.getFile(): op=%s path=%s -> return os.ErrNotExist", op, path)
+	fs.TestDouble.Log("return os.ErrNotExist").Path(path).Operation("getFile").Error(os.ErrNotExist).Done()
 	return nil, os.ErrNotExist
 }
+
 func (fs *FS) getDirEntries(dirname string) map[string]*FileInfo {
 
 	tmpFiles := make(map[string]*FileInfo)
@@ -101,30 +158,22 @@ func (fs *FS) getDirEntries(dirname string) map[string]*FileInfo {
 }
 
 func (fs *FS) ReadDir(dirname string) ([]os.FileInfo, error) {
-	if v, ok := fs.PathStubs[dirname]; ok {
-		if v.Error != nil {
-			fs.TestDouble.Log("op=ReadDir path=%s -> return pre-configured error %v", dirname, v.Error)
-			return nil, v.Error
-		}
-		if !v.IsDir() {
-			fs.TestDouble.Log("op=ReadDir path=%s -> return os.ErrInvalid NOT A DIRECTORY", dirname)
-			return nil, os.ErrInvalid
-		}
-	} else {
-		fs.TestDouble.Log("op=ReadDir path=%s -> return os.ErrNotExist", dirname)
-		return nil, os.ErrNotExist
+
+	if err := fs.requireDir(dirname, "ReadDir"); err != nil {
+		return nil, err
 	}
+
 	tmpFiles := fs.getDirEntries(dirname)
 	retval := make([]os.FileInfo, 0)
 	for _, v := range tmpFiles {
 		if v.Error != nil {
-			fs.TestDouble.Log("op=ReadDir path=%s -> return pre-configured error %v", filepath.Join(dirname, v.Name()), v.Error)
+			fs.TestDouble.Log("return pre-configured error").Path(dirname).Operation("ReadDir").Error(v.Error).Done()
 			return nil, v.Error
 		}
 		retval = append(retval, v)
 
 	}
-	fs.TestDouble.Log("op=ReadDir path=%s -> return []os.FileInfo", dirname)
+	fs.TestDouble.Log("return return []os.FileInfo").Path(dirname).Operation("ReadDir").Done()
 	return retval, nil
 }
 
@@ -147,31 +196,45 @@ func (fs *FS) ReadFile(path string) ([]byte, error) {
 }
 
 // Walk is a stub for filepath.Walk
-func (fs *FS) Walk(root string, walkFn filepath.WalkFunc) error {
-
-	if v, ok := fs.PathStubs[root]; ok {
+func (fs *FS) requireDir(path string, op string) error {
+	if v, ok := fs.PathStubs[path]; ok {
 		if v.Error != nil {
-			fs.TestDouble.Log("op=Walk path=%s -> return pre-configured error %v", root, v.Error)
+			fs.TestDouble.Log("return pre-configured error").Path(path).Operation(op).Error(v.Error).Done()
 			return v.Error
 		}
 		if !v.IsDir() {
-			fs.TestDouble.Log("op=Walk path=%s -> return os.ErrInvalid NOT A DIRECTORY", root)
+			fs.TestDouble.Log("return pre-configured error").Path(path).Operation(op).Error(os.ErrInvalid).Done()
 			return os.ErrInvalid
 		}
 	} else {
-		fs.TestDouble.Log("op=Walk path=%s -> return os.ErrNotExist", root)
+		fs.TestDouble.Log("return pre-configured error").Path(path).Operation(op).Error(os.ErrNotExist).Done()
 		return os.ErrNotExist
+	}
+	return nil
+}
+
+// Walk is a stub for filepath.Walk
+func (fs *FS) Walk(root string, walkFn filepath.WalkFunc) error {
+
+	Once.Do(func() {
+
+	})
+
+	if err := fs.requireDir(root, "Walk"); err != nil {
+		return err
 	}
 
 	keys := []string{}
 	for k, _ := range fs.PathStubs {
 		keys = append(keys, k)
 	}
+	// log.Println(">>>>>> Walk keys before sort", keys)
 	sort.Strings(keys)
+	// log.Println(">>>>>> Walk keys after sort", keys)
 	for _, k := range keys {
 		if strings.HasPrefix(k, root) {
 			fi, err := fs.getFile(k, "walk")
-			fs.TestDouble.Log("op=Walk path=%s -> calling walkFn", k)
+			fs.TestDouble.Log("calling walkFn").Path(k).Operation("Walk").Done()
 			walkFn(k, fi, err)
 		}
 	}

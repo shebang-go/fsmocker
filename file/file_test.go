@@ -82,7 +82,7 @@ func TestFS_ReadDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
 				PathStubs:  tt.fields.PathStubs,
-				TestDouble: &testdouble.TestDouble{},
+				TestDouble: testdouble.NewTestDouble(testdouble.WithLogging(t)).(*testdouble.TestDouble),
 			}
 			got, err := fs.ReadDir(tt.args.dirname)
 			assert.ElementsMatch(t, got, tt.want)
@@ -127,7 +127,7 @@ func TestFS_getDirEntries(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
 				PathStubs:  tt.fields.PathStubs,
-				TestDouble: &testdouble.TestDouble{},
+				TestDouble: testdouble.NewTestDouble(testdouble.WithLogging(t)).(*testdouble.TestDouble),
 			}
 			if got := fs.getDirEntries(tt.args.dirname); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("FS.getDirEntries() = %v, want %v", got, tt.want)
@@ -181,7 +181,7 @@ func TestFS_Stat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
 				PathStubs:  tt.fields.PathStubs,
-				TestDouble: &testdouble.TestDouble{},
+				TestDouble: testdouble.NewTestDouble(testdouble.WithLogging(t)).(*testdouble.TestDouble),
 			}
 			got, err := fs.Stat(tt.args.path)
 			if (err != nil) != tt.wantErr {
@@ -231,7 +231,7 @@ func TestFS_ReadFile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
 				PathStubs:  tt.fields.PathStubs,
-				TestDouble: &testdouble.TestDouble{},
+				TestDouble: testdouble.NewTestDouble(testdouble.WithLogging(t)).(*testdouble.TestDouble),
 				t:          tt.fields.t,
 			}
 			got, err := fs.ReadFile(tt.args.path)
@@ -275,7 +275,7 @@ func TestFS_Walk(t *testing.T) {
 				"/home/maggy/subdir/file3": {FName: "file3"},
 			}},
 			args: args{root: "/home/maggy"},
-			want: []string{"/home/maggy/file2", "/home/maggy/subdir", "/home/maggy/subdir/file3", "/home/maggy", "/home/maggy/file1"},
+			want: []string{"/home/maggy", "/home/maggy/file1", "/home/maggy/file2", "/home/maggy/subdir", "/home/maggy/subdir/file3"},
 		},
 		{
 			name: "noError(/home/maggy/subdir)",
@@ -313,7 +313,7 @@ func TestFS_Walk(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := &FS{
 				PathStubs:  tt.fields.PathStubs,
-				TestDouble: &testdouble.TestDouble{},
+				TestDouble: testdouble.NewTestDouble(testdouble.WithLogging(t)).(*testdouble.TestDouble),
 				t:          tt.fields.t,
 			}
 			got := []string{}
@@ -322,9 +322,79 @@ func TestFS_Walk(t *testing.T) {
 				return err
 			})
 			if tt.wantErr == nil {
-				assert.ElementsMatch(t, tt.want, got)
+				assert.Exactly(t, tt.want, got)
 			} else {
 				assert.EqualError(t, tt.wantErr, err.Error())
+			}
+		})
+	}
+}
+
+func TestFS_Config(t *testing.T) {
+	type args struct {
+		p string
+	}
+	tests := []struct {
+		name  string
+		files []*FileInfo
+		args  args
+		want  *Configer
+	}{
+		{
+			name: "path=/folder1",
+			args: args{
+				p: "/folder1",
+			},
+			files: []*FileInfo{
+				{FName: "/", FIsDir: true, Path: "/"},
+				{FName: "folder1", FIsDir: true, Path: "/folder1"},
+				{FName: "file1", Path: "/folder1/file1"},
+			},
+		},
+		{
+			name: "path=/folder1/file1",
+			args: args{
+				p: "/folder1/file1",
+			},
+			files: []*FileInfo{
+				{FName: "/", FIsDir: true, Path: "/"},
+				{FName: "folder1", FIsDir: true, Path: "/folder1"},
+				{FName: "file1", Path: "/folder1/file1"},
+			},
+		},
+		{
+			name: "path=nil",
+			args: args{
+				p: "/invalid",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := CreateFS(testdouble.NewTestDouble(testdouble.WithLogging(t)).(*testdouble.TestDouble), WithFiles(tt.files))
+
+			configer := st.Config(tt.args.p)
+			if configer != nil {
+				currentData := st.Config(tt.args.p).Data()
+				assert.Equal(t, []byte(nil), currentData)
+
+				newData := st.Config(tt.args.p).Data([]byte("test"))
+				assert.NotEqual(t, currentData, newData)
+				assert.Equal(t, []byte("test"), st.Config(tt.args.p).Data())
+
+				currentMode := st.Config(tt.args.p).Mode()
+				assert.Equal(t, os.FileMode(0x0), currentMode)
+
+				newMode := st.Config(tt.args.p).Mode(0x750)
+				assert.Equal(t, os.FileMode(0x750), newMode)
+
+				currentErr := st.Config(tt.args.p).Error()
+				assert.Equal(t, nil, currentErr)
+
+				newError := st.Config(tt.args.p).Error(errors.New("test"))
+				assert.Equal(t, errors.New("test"), newError)
+			} else {
+				assert.Equal(t, nil, configer)
 			}
 		})
 	}
