@@ -22,6 +22,7 @@ type Stub interface {
 	Walk(root string, walkFn filepath.WalkFunc) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	Abs(p string) (string, error)
+	FileInfo(p string) os.FileInfo
 }
 type TestDoubleOption func(td *testdouble.TestDouble)
 type StubOption stub.Option

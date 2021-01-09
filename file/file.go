@@ -96,6 +96,13 @@ func CreateFS(td *testdouble.TestDouble, opts ...Option) *FS {
 	return fs
 }
 
+func (fs *FS) FileInfo(p string) os.FileInfo {
+	if v, ok := fs.PathStubs[p]; ok {
+		return v
+	}
+	return nil
+}
+
 // Config provides access to stubs
 func (fs *FS) Config(p string) Configer {
 	var fi *FileInfo

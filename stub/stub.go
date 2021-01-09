@@ -23,6 +23,7 @@ type Stuber interface {
 	Walk(root string, walkFn filepath.WalkFunc) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	Abs(p string) (string, error)
+	FileInfo(p string) os.FileInfo
 }
 
 // Stub represents a file system stub.
@@ -84,6 +85,11 @@ func (st *Stub) Options(opts ...Option) {
 	for _, opt := range opts {
 		opt(st)
 	}
+}
+
+// Stat is a stub for os.Stat
+func (st *Stub) FileInfo(path string) os.FileInfo {
+	return st.fs.FileInfo(path)
 }
 
 // Stat is a stub for os.Stat
